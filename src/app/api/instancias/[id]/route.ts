@@ -127,8 +127,8 @@ export async function DELETE(
     }
 
     // Desconectar e deletar da uaZapi
-    await disconnectUazapiInstance(instancia.instanciaId)
-    await deleteUazapiInstance(instancia.instanciaId)
+    await disconnectUazapiInstance(instancia.token || instancia.instanciaId)
+    await deleteUazapiInstance(instancia.token || instancia.instanciaId)
 
     // Deletar do banco de dados
     await prisma.instanciaWhatsApp.delete({

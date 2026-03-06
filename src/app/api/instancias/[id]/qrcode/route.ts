@@ -51,7 +51,7 @@ export async function GET(
     })
 
     // Obter QRCode da uaZapi
-    const uazapiResponse = await connectUazapiInstance(instancia.instanciaId)
+    const uazapiResponse = await connectUazapiInstance(instancia.token || instancia.instanciaId)
 
     if (uazapiResponse.error) {
       // Reverter status para DISCONNECTED em caso de erro
