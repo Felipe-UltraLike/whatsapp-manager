@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       data: {
         nome: validatedData.nome,
         instanciaId: instanciaId,
-        token: uazapiResponse.instance?.token || uazapiResponse.token || null,
+        token: uazapiResponse.token || null,
         empresaId: empresaId,
         status: 'DISCONNECTED'
       },

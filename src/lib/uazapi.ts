@@ -42,10 +42,8 @@ export interface UazapiConnectResponse {
  * Example: 5511959299715@s.whatsapp.net
  */
 export function formatPhoneNumber(phone: string): string {
-  // Remove caracteres não numéricos
   const cleanPhone = phone.replace(/\D/g, '')
   
-  // If already has the suffix, return as is
   if (cleanPhone.includes('@')) {
     return cleanPhone
   }
@@ -79,7 +77,6 @@ export async function createUazapiInstance(instanceName: string): Promise<Uazapi
       }
     }
 
-    // Retornar o token gerado
     return {
       instance: {
         instanceName: data.name || data.instance?.instanceName || instanceName,
@@ -100,20 +97,17 @@ export async function createUazapiInstance(instanceName: string): Promise<Uazapi
 /**
  * Conecta uma instância e obtem o QRCode
  * Documentação: https://docs.uazapi.com/endpoint/post/instance~connect
- * O token retornado pelo createUazapiInstance deve ser usado para conectar
+ * O token retornado pela createUazapiInstance deve ser usado para conectar
  */
-export async function connectUazapiInstance(instanceToken: string, phone?: string): Promise<UazapiConnectResponse> {
+export async function connectUazapiInstance(instanceToken: string): Promise<UazapiConnectResponse> {
   try {
-    const body: Record<string, string> = {}
-    
     const response = await fetch(`${UAZAPI_SERVER_URL}/instance/connect`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'token': instanceToken
-      },
-      body: JSON.stringify(body)
+      }
     })
 
     const data = await response.json()
@@ -121,11 +115,10 @@ export async function connectUazapiInstance(instanceToken: string, phone?: strin
     
     if (!response.ok) {
       return {
-        error: data.message || data.error || 'Erro ao conectar instância'
+        error: data.message || data.error || 'Erro ao conectar instância',
       }
     }
 
-    // Retornar o QRCode (base64)
     return {
       base64: data.base64 || data.qrcode?.base64 || data.code,
       qrcode: data.qrcode,
@@ -135,7 +128,7 @@ export async function connectUazapiInstance(instanceToken: string, phone?: strin
   } catch (error) {
     console.error('Erro ao conectar instância uaZapi:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
     }
   }
 }
@@ -172,7 +165,7 @@ export async function getUazapiInstanceStatus(instanceToken: string): Promise<Ua
   } catch (error) {
     console.error('Erro ao obter status uaZapi:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
     }
   }
 }
@@ -208,13 +201,13 @@ export async function disconnectUazapiInstance(instanceToken: string): Promise<U
   } catch (error) {
     console.error('Erro ao desconectar instância uaZapi:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
     }
   }
 }
 
 /**
- * Deletar uma instância do servidor uaZapi
+ * Deleta uma instância do servidor uaZapi
  */
 export async function deleteUazapiInstance(instanceToken: string): Promise<UazapiInstanceResponse> {
   try {
@@ -242,13 +235,13 @@ export async function deleteUazapiInstance(instanceToken: string): Promise<Uazap
   } catch (error) {
     console.error('Erro ao deletar instância uaZapi:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
     }
   }
 }
 
 /**
- * Lista todas as instâncias no servidor uaZapi
+ * Lista todas as inst?ncias no servidor uaZapi
  */
 export async function listUazapiInstances(): Promise<UazapiInstanceResponse> {
   try {
