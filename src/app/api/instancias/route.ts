@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth-helpers'
 import { z } from 'zod'
 import { createUazapiInstance, connectUazapiInstance, deleteUazapiInstance } from '@/lib/uazapi'
 
@@ -11,17 +11,17 @@ const createInstanciaSchema = z.object({
 })
 
 // GET - Listar instâncias
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
     let instancias
 
-    if (session.user.role === 'SUPER_ADMIN') {
+    if (user.role === 'SUPER_ADMIN') {
       // Super-Admin vê todas as instâncias
       instancias = await prisma.instanciaWhatsApp.findMany({
         include: {
@@ -34,7 +34,7 @@ export async function GET() {
     } else {
       // Outros usuários veem apenas instâncias da sua empresa
       instancias = await prisma.instanciaWhatsApp.findMany({
-        where: { empresaId: session.user.empresaId },
+        where: { empresaId: user.empresaId },
         include: {
           empresa: {
             select: { id: true, nome: true }
@@ -54,9 +54,9 @@ export async function GET() {
 // POST - Criar nova instância
 export async function POST(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
@@ -66,13 +66,13 @@ export async function POST(request: NextRequest) {
     // Determinar empresaId
     let empresaId: string
     
-    if (session.user.role === 'SUPER_ADMIN') {
+    if (user.role === 'SUPER_ADMIN') {
       if (!validatedData.empresaId) {
         return NextResponse.json({ error: 'Empresa é obrigatória para criar instância.' }, { status: 400 })
       }
       empresaId = validatedData.empresaId
     } else {
-      empresaId = session.user.empresaId
+      empresaId = user.empresaId
     }
 
     // Verificar se a empresa existe e obter limite
@@ -135,15 +135,15 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE - Deletar todas as instâncias (apenas para administração)
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
     }
 

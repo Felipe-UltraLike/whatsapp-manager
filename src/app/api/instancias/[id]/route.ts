@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth-helpers'
 import { z } from 'zod'
 import { deleteUazapiInstance, disconnectUazapiInstance } from '@/lib/uazapi'
 
@@ -15,9 +15,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
@@ -37,7 +37,7 @@ export async function GET(
     }
 
     // Verificar permissão
-    if (session.user.role !== 'SUPER_ADMIN' && instancia.empresaId !== session.user.empresaId) {
+    if (user.role !== 'SUPER_ADMIN' && instancia.empresaId !== user.empresaId) {
       return NextResponse.json({ error: 'Acesso negado a esta instância.' }, { status: 403 })
     }
 
@@ -54,9 +54,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
@@ -74,7 +74,7 @@ export async function PUT(
     }
 
     // Verificar permissão
-    if (session.user.role !== 'SUPER_ADMIN' && instanciaExistente.empresaId !== session.user.empresaId) {
+    if (user.role !== 'SUPER_ADMIN' && instanciaExistente.empresaId !== user.empresaId) {
       return NextResponse.json({ error: 'Acesso negado a esta instância.' }, { status: 403 })
     }
 
@@ -104,9 +104,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
@@ -122,7 +122,7 @@ export async function DELETE(
     }
 
     // Verificar permissão
-    if (session.user.role !== 'SUPER_ADMIN' && instancia.empresaId !== session.user.empresaId) {
+    if (user.role !== 'SUPER_ADMIN' && instancia.empresaId !== user.empresaId) {
       return NextResponse.json({ error: 'Acesso negado a esta instância.' }, { status: 403 })
     }
 

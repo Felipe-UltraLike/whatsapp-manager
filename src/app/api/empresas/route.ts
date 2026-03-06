@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession } from '@/lib/auth'
-import { hash } from 'bcryptjs'
+import { getAuthUser } from '@/lib/auth-helpers'
 import { z } from 'zod'
 
 // Schema de validação para criação de empresa
@@ -11,15 +10,15 @@ const createEmpresaSchema = z.object({
 })
 
 // GET - Listar todas as empresas (SUPER_ADMIN apenas)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado. Apenas Super-Admin pode listar empresas.' }, { status: 403 })
     }
 
@@ -42,13 +41,13 @@ export async function GET() {
 // POST - Criar nova empresa (SUPER_ADMIN apenas)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado. Apenas Super-Admin pode criar empresas.' }, { status: 403 })
     }
 

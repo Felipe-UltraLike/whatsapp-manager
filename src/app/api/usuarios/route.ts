@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth-helpers'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 
@@ -14,15 +14,15 @@ const createUsuarioSchema = z.object({
 })
 
 // GET - Listar todos os usuários (SUPER_ADMIN apenas)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado. Apenas Super-Admin pode listar usuários.' }, { status: 403 })
     }
 
@@ -48,13 +48,13 @@ export async function GET() {
 // POST - Criar novo usuário (SUPER_ADMIN apenas)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado. Apenas Super-Admin pode criar usuários.' }, { status: 403 })
     }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth-helpers'
 import { hash } from 'bcryptjs'
 import { z } from 'zod'
 
@@ -19,13 +19,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
     }
 
@@ -60,13 +60,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
     }
 
@@ -145,13 +145,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getAuthSession()
+    const user = getAuthUser(request)
     
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    if (session.user.role !== 'SUPER_ADMIN') {
+    if (user.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
     }
 
@@ -167,7 +167,7 @@ export async function DELETE(
     }
 
     // Não permitir deletar a si mesmo
-    if (session.user.id === id) {
+    if (user.id === id) {
       return NextResponse.json({ error: 'Não é possível deletar seu próprio usuário.' }, { status: 400 })
     }
 
