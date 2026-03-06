@@ -7,15 +7,14 @@ const UAZAPI_ADMIN_TOKEN = process.env.UAZAPI_ADMIN_TOKEN || ''
 
 export interface UazapiInstanceResponse {
   instance?: {
-    instanceName: string
-    status: string
+    id?: string
+    instanceName?: string
+    status?: string
     token?: string
     name?: string
+    qrcode?: string
   }
-  qrcode?: {
-    code?: string
-    base64?: string
-  }
+  qrcode?: string
   token?: string
   status?: string
   message?: string
@@ -24,6 +23,8 @@ export interface UazapiInstanceResponse {
   code?: string
   state?: string
   phone?: string
+  connected?: boolean
+  response?: string
 }
 
 export interface UazapiConnectResponse {
@@ -34,6 +35,11 @@ export interface UazapiConnectResponse {
   message?: string
   error?: string
   state?: string
+  connected?: boolean
+  instance?: {
+    qrcode?: string
+    status?: string
+  }
 }
 
 /**
@@ -54,14 +60,20 @@ export function formatPhoneNumber(phone: string): string {
 /**
  * Cria uma nova instância WhatsApp na uaZapi
  * Documentação: https://docs.uazapi.com/endpoint/post/instance~init
+ * IMPORTANTE: Usa o Admin Token no header 'admintoken' para criar instâncias
  */
 export async function createUazapiInstance(instanceName: string): Promise<UazapiInstanceResponse> {
   try {
+    console.log('[uaZapi] Criando instância:', instanceName)
+    console.log('[uaZapi] Server URL:', UAZAPI_SERVER_URL)
+    console.log('[uaZapi] Admin Token configurado:', UAZAPI_ADMIN_TOKEN ? 'Sim' : 'Não')
+    
     const response = await fetch(`${UAZAPI_SERVER_URL}/instance/init`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'admintoken': UAZAPI_ADMIN_TOKEN  // Admin Token para criar instâncias
       },
       body: JSON.stringify({
         name: instanceName
@@ -69,25 +81,33 @@ export async function createUazapiInstance(instanceName: string): Promise<Uazapi
     })
 
     const data = await response.json()
-    console.log('[uaZapi] Criar instância:', JSON.stringify(data, null, 2))
+    console.log('[uaZapi] Resposta criação:', JSON.stringify(data, null, 2))
     
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       return {
         error: data.message || data.error || 'Erro ao criar instância na uaZapi'
       }
     }
 
+    // A resposta da uaZapi retorna o token em data.token ou data.instance.token
+    const instanceToken = data.token || data.instance?.token
+    const instanceId = data.instance?.id
+
+    console.log('[uaZapi] Token da instância:', instanceToken)
+    console.log('[uaZapi] ID da instância:', instanceId)
+
     return {
       instance: {
-        instanceName: data.name || data.instance?.instanceName || instanceName,
-        status: data.status || 'created',
-        token: data.token || data.instance?.token
+        id: instanceId,
+        instanceName: data.name || data.instance?.name || instanceName,
+        status: data.instance?.status || 'disconnected',
+        token: instanceToken
       },
-      token: data.token || data.instance?.token,
+      token: instanceToken,
       status: 'created'
     }
   } catch (error) {
-    console.error('Erro ao criar instância uaZapi:', error)
+    console.error('[uaZapi] Erro ao criar instância:', error)
     return {
       error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
     }
@@ -97,38 +117,44 @@ export async function createUazapiInstance(instanceName: string): Promise<Uazapi
 /**
  * Conecta uma instância e obtem o QRCode
  * Documentação: https://docs.uazapi.com/endpoint/post/instance~connect
- * O token retornado pela createUazapiInstance deve ser usado para conectar
+ * IMPORTANTE: Usa o token da instância no header 'token'
  */
 export async function connectUazapiInstance(instanceToken: string): Promise<UazapiConnectResponse> {
   try {
+    console.log('[uaZapi] Conectando instância com token:', instanceToken?.substring(0, 8) + '...')
+    
     const response = await fetch(`${UAZAPI_SERVER_URL}/instance/connect`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'token': instanceToken
+        'token': instanceToken  // Token da instância para conectar
       }
     })
 
     const data = await response.json()
-    console.log('[uaZapi] Conectar instância:', JSON.stringify(data, null, 2))
+    console.log('[uaZapi] Resposta conexão:', JSON.stringify(data, null, 2)?.substring(0, 500) + '...')
     
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       return {
         error: data.message || data.error || 'Erro ao conectar instância',
       }
     }
 
+    // O QRCode vem em instance.qrcode no formato data:image/png;base64,...
+    const qrCode = data.instance?.qrcode || data.qrcode || data.base64
+
     return {
-      base64: data.base64 || data.qrcode?.base64 || data.code,
-      qrcode: data.qrcode,
+      base64: qrCode,
+      qrcode: qrCode,
       code: data.code,
-      status: data.status || data.state || 'connecting'
+      status: data.instance?.status || data.status || 'connecting',
+      connected: data.connected
     }
   } catch (error) {
-    console.error('Erro ao conectar instância uaZapi:', error)
+    console.error('[uaZapi] Erro ao conectar instância:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
     }
   }
 }
@@ -150,22 +176,23 @@ export async function getUazapiInstanceStatus(instanceToken: string): Promise<Ua
     const data = await response.json()
     console.log('[uaZapi] Status instância:', JSON.stringify(data, null, 2))
     
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       return {
         error: data.message || data.error || 'Erro ao obter status'
       }
     }
 
     return {
-      status: data.status || data.state,
-      state: data.state,
-      phone: data.phone,
+      status: data.instance?.status || data.status,
+      state: data.instance?.status,
+      phone: data.instance?.jid,
+      connected: data.connected,
       instance: data.instance
     }
   } catch (error) {
-    console.error('Erro ao obter status uaZapi:', error)
+    console.error('[uaZapi] Erro ao obter status:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
     }
   }
 }
@@ -188,7 +215,7 @@ export async function disconnectUazapiInstance(instanceToken: string): Promise<U
     const data = await response.json()
     console.log('[uaZapi] Desconectar:', JSON.stringify(data, null, 2))
     
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       return {
         error: data.message || data.error || 'Erro ao desconectar instância'
       }
@@ -196,12 +223,12 @@ export async function disconnectUazapiInstance(instanceToken: string): Promise<U
 
     return {
       status: 'disconnected',
-      message: data.message || 'Instância desconectada'
+      message: data.message || data.response || 'Instância desconectada'
     }
   } catch (error) {
-    console.error('Erro ao desconectar instância uaZapi:', error)
+    console.error('[uaZapi] Erro ao desconectar:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
     }
   }
 }
@@ -222,7 +249,7 @@ export async function deleteUazapiInstance(instanceToken: string): Promise<Uazap
     const data = await response.json()
     console.log('[uaZapi] Deletar:', JSON.stringify(data, null, 2))
     
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       return {
         error: data.message || data.error || 'Erro ao deletar instância'
       }
@@ -230,18 +257,18 @@ export async function deleteUazapiInstance(instanceToken: string): Promise<Uazap
 
     return {
       status: 'deleted',
-      message: data.message || 'Instância deletada'
+      message: data.message || data.response || 'Instância deletada'
     }
   } catch (error) {
-    console.error('Erro ao deletar instância uaZapi:', error)
+    console.error('[uaZapi] Erro ao deletar:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
     }
   }
 }
 
 /**
- * Lista todas as inst?ncias no servidor uaZapi
+ * Lista todas as instâncias no servidor uaZapi
  */
 export async function listUazapiInstances(): Promise<UazapiInstanceResponse> {
   try {
@@ -254,19 +281,19 @@ export async function listUazapiInstances(): Promise<UazapiInstanceResponse> {
     })
 
     const data = await response.json()
-    console.log('[uaZapi] Listar inst?ncias:', JSON.stringify(data, null, 2))
+    console.log('[uaZapi] Listar instâncias:', JSON.stringify(data, null, 2))
     
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       return {
-        error: data.message || data.error || 'Erro ao listar inst?ncias'
+        error: data.message || data.error || 'Erro ao listar instâncias'
       }
     }
 
     return data
   } catch (error) {
-    console.error('Erro ao listar inst?ncias uaZapi:', error)
+    console.error('[uaZapi] Erro ao listar instâncias:', error)
     return {
-      error: error instanceof Error ? error.message : 'Erro de conex? com uaZapi'
+      error: error instanceof Error ? error.message : 'Erro de conexão com uaZapi'
     }
   }
 }
