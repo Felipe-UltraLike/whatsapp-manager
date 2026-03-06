@@ -25,7 +25,9 @@ import {
   QrCode, 
   Smartphone,
   Loader2,
-  Menu
+  Menu,
+  DollarSign,
+  Calendar
 } from 'lucide-react'
 
 interface UserData {
@@ -74,6 +76,43 @@ interface Instancia {
   createdAt: string
 }
 
+interface Boleto {
+  id: string
+  nomeCliente: string
+  dataVencimento: string
+  valor: number
+  empresa: {
+    id: string
+    nome: string
+  }
+  createdAt: string
+}
+
+// Função para obter o primeiro e último dia do mês atual
+function getCurrentMonthRange() {
+  const hoje = new Date()
+  const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+  return {
+    inicio: primeiroDia.toISOString().split('T')[0],
+    fim: ultimoDia.toISOString().split('T')[0]
+  }
+}
+
+// Função para formatar data
+function formatDate(dateString: string) {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('pt-BR')
+}
+
+// Função para formatar valor em Real
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value)
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -87,6 +126,9 @@ export default function DashboardPage() {
     qrCode: null,
     loading: false
   })
+  
+  // Estado para filtro de datas no financeiro
+  const [dateFilter, setDateFilter] = useState(getCurrentMonthRange())
 
   // Verificar autenticação
   useEffect(() => {
@@ -96,7 +138,6 @@ export default function DashboardPage() {
       return
     }
     const parsedUser = JSON.parse(userData)
-    // Usar flushSync ou setState de forma assíncrona
     const timer = setTimeout(() => {
       setUser(parsedUser)
       setLoading(false)
@@ -130,6 +171,16 @@ export default function DashboardPage() {
     queryFn: async (): Promise<Instancia[]> => {
       const res = await fetch('/api/instancias')
       if (!res.ok) throw new Error('Erro ao carregar instâncias')
+      return res.json()
+    },
+    enabled: !!user
+  })
+
+  const { data: boletos, isLoading: loadingBoletos, refetch: refetchBoletos } = useQuery({
+    queryKey: ['boletos', dateFilter.inicio, dateFilter.fim],
+    queryFn: async (): Promise<Boleto[]> => {
+      const res = await fetch(`/api/boletos?dataInicio=${dateFilter.inicio}&dataFim=${dateFilter.fim}`)
+      if (!res.ok) throw new Error('Erro ao carregar boletos')
       return res.json()
     },
     enabled: !!user
@@ -244,6 +295,42 @@ export default function DashboardPage() {
     onError: (error: Error) => toast.error(error.message)
   })
 
+  const createBoletoMutation = useMutation({
+    mutationFn: async (data: { nomeCliente: string; dataVencimento: string; valor: number; empresaId?: string }) => {
+      const res = await fetch('/api/boletos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Erro ao criar boleto')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['boletos'] })
+      toast.success('Boleto criado com sucesso!')
+    },
+    onError: (error: Error) => toast.error(error.message)
+  })
+
+  const deleteBoletoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/boletos/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Erro ao deletar boleto')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['boletos'] })
+      toast.success('Boleto deletado com sucesso!')
+    },
+    onError: (error: Error) => toast.error(error.message)
+  })
+
   const handleLogout = () => {
     localStorage.removeItem('user')
     router.push('/')
@@ -285,6 +372,26 @@ export default function DashboardPage() {
     }
     const { color, label } = config[status] || config.DISCONNECTED
     return <Badge className={color}>{label}</Badge>
+  }
+
+  const getVencimentoBadge = (dataVencimento: string) => {
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    const vencimento = new Date(dataVencimento)
+    vencimento.setHours(0, 0, 0, 0)
+    
+    const diffTime = vencimento.getTime() - hoje.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    if (diffDays < 0) {
+      return <Badge className="bg-red-500">Vencido</Badge>
+    } else if (diffDays === 0) {
+      return <Badge className="bg-yellow-500">Vence hoje</Badge>
+    } else if (diffDays <= 7) {
+      return <Badge className="bg-orange-500">Vence em {diffDays} dias</Badge>
+    } else {
+      return <Badge className="bg-green-500">Em dia</Badge>
+    }
   }
 
   if (loading) {
@@ -335,6 +442,15 @@ export default function DashboardPage() {
               >
                 <Smartphone className="w-4 h-4 mr-2" />
                 Instâncias
+              </Button>
+              
+              <Button
+                variant={activeTab === 'financeiro' ? 'secondary' : 'ghost'}
+                className="w-full justify-start"
+                onClick={() => { setActiveTab('financeiro'); setSidebarOpen(false) }}
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                Financeiro
               </Button>
               
               {isSuperAdmin && (
@@ -390,6 +506,7 @@ export default function DashboardPage() {
           </Button>
           <h2 className="text-xl font-semibold">
             {activeTab === 'instancias' && 'Instâncias WhatsApp'}
+            {activeTab === 'financeiro' && 'Financeiro - Boletos'}
             {activeTab === 'empresas' && 'Empresas'}
             {activeTab === 'usuarios' && 'Usuários'}
           </h2>
@@ -465,6 +582,94 @@ export default function DashboardPage() {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'financeiro' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="date"
+                      value={dateFilter.inicio}
+                      onChange={(e) => setDateFilter(prev => ({ ...prev, inicio: e.target.value }))}
+                      className="w-40"
+                    />
+                    <span className="text-muted-foreground">até</span>
+                    <Input
+                      type="date"
+                      value={dateFilter.fim}
+                      onChange={(e) => setDateFilter(prev => ({ ...prev, fim: e.target.value }))}
+                      className="w-40"
+                    />
+                  </div>
+                </div>
+                <CreateBoletoDialog 
+                  isSuperAdmin={isSuperAdmin} 
+                  empresas={empresas || []}
+                  empresaId={user.empresaId}
+                  onCreate={(data) => createBoletoMutation.mutate(data)}
+                  loading={createBoletoMutation.isPending}
+                />
+              </div>
+
+              {loadingBoletos ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-8 h-8 animate-spin" /></div>
+              ) : boletos?.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhum boleto encontrado</p>
+                    <p className="text-sm">Clique em "Novo Boleto" para adicionar</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="rounded-md border">
+                  <div className="grid grid-cols-5 gap-4 p-4 bg-muted font-medium text-sm">
+                    <div>Nome Cliente</div>
+                    <div>Data Vencimento</div>
+                    <div>Valor</div>
+                    <div>Status</div>
+                    <div className="text-right">Ações</div>
+                  </div>
+                  {boletos?.map((boleto) => (
+                    <div key={boleto.id} className="grid grid-cols-5 gap-4 p-4 border-t items-center">
+                      <div className="font-medium">{boleto.nomeCliente}</div>
+                      <div>{formatDate(boleto.dataVencimento)}</div>
+                      <div className="font-semibold text-green-600">{formatCurrency(boleto.valor)}</div>
+                      <div>{getVencimentoBadge(boleto.dataVencimento)}</div>
+                      <div className="text-right">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive"><Trash2 className="w-4 h-4" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Deletar boleto?</AlertDialogTitle>
+                              <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteBoletoMutation.mutate(boleto.id)} className="bg-red-500 hover:bg-red-600">Deletar</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Total */}
+                  <div className="grid grid-cols-5 gap-4 p-4 border-t bg-green-50 dark:bg-green-900/20 font-bold">
+                    <div className="col-span-2">Total de Boletos: {boletos?.length || 0}</div>
+                    <div className="text-green-600">
+                      {formatCurrency(boletos?.reduce((sum, b) => sum + b.valor, 0) || 0)}
+                    </div>
+                    <div></div>
+                    <div></div>
+                  </div>
                 </div>
               )}
             </div>
@@ -686,6 +891,66 @@ function CreateInstanciaDialog({ isSuperAdmin, empresas, onCreate, loading }: { 
             )}
           </div>
           <DialogFooter><Button type="submit" disabled={loading || (isSuperAdmin && !empresaId)}>{loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Criar</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function CreateBoletoDialog({ isSuperAdmin, empresas, empresaId: userEmpresaId, onCreate, loading }: { isSuperAdmin: boolean; empresas: Empresa[]; empresaId: string; onCreate: (data: { nomeCliente: string; dataVencimento: string; valor: number; empresaId?: string }) => void; loading: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [nomeCliente, setNomeCliente] = useState('')
+  const [dataVencimento, setDataVencimento] = useState('')
+  const [valor, setValor] = useState('')
+  const [empresaId, setEmpresaId] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const data: { nomeCliente: string; dataVencimento: string; valor: number; empresaId?: string } = {
+      nomeCliente,
+      dataVencimento,
+      valor: parseFloat(valor)
+    }
+    if (isSuperAdmin) data.empresaId = empresaId
+    onCreate(data)
+    setNomeCliente(''); setDataVencimento(''); setValor(''); setEmpresaId('')
+    setOpen(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button className="bg-green-500 hover:bg-green-600"><Plus className="w-4 h-4 mr-2" />Novo Boleto</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Novo Boleto</DialogTitle><DialogDescription>Cadastre um novo boleto</DialogDescription></DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome do Cliente</Label>
+              <Input value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} placeholder="Nome do cliente" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Data de Vencimento</Label>
+              <Input type="date" value={dataVencimento} onChange={(e) => setDataVencimento(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Valor (R$)</Label>
+              <Input type="number" step="0.01" min="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" required />
+            </div>
+            {isSuperAdmin && (
+              <div className="space-y-2">
+                <Label>Empresa</Label>
+                <Select value={empresaId} onValueChange={setEmpresaId} required>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{empresas.map((e) => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={loading || (isSuperAdmin && !empresaId)}>
+              {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Criar
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
