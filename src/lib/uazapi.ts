@@ -2,8 +2,8 @@
 // Server URL: https://nexus-ultra.uazapi.com
 // Admin Token: bZC3KpqjQULdV6Y0jADxs9OuaapBtKuNX84WGWEH2YSNimsjFK
 
-const UAZAPI_SERVER_URL = 'https://nexus-ultra.uazapi.com'
-const UAZAPI_ADMIN_TOKEN = 'bZC3KpqjQULdV6Y0jADxs9OuaapBtKuNX84WGWEH2YSNimsjFK'
+const UAZAPI_SERVER_URL = process.env.UAZAPI_SERVER_URL || 'https://nexus-ultra.uazapi.com'
+const UAZAPI_ADMIN_TOKEN = process.env.UAZAPI_ADMIN_TOKEN || ''
 
 export interface UazapiInstanceResponse {
   instance?: {
