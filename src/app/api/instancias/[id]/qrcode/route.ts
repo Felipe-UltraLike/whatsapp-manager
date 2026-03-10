@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth-helpers'
-import { connectUazapiInstance } from '@/lib/uazapi'
+import { createUazapiInstance, connectUazapiInstance, getUazapiInstanceStatus } from '@/lib/uazapi'
 
 // GET - Obter QRCode para conexão
 export async function GET(
@@ -50,8 +50,41 @@ export async function GET(
       data: { status: 'CONNECTING' }
     })
 
+    let instanceToken = instancia.token
+
+    // Se não tem token, criar instância na uaZapi primeiro
+    if (!instanceToken) {
+      console.log('[QRCode] Criando instância na uaZapi:', instancia.instanciaId)
+      
+      const createResponse = await createUazapiInstance(instancia.instanciaId)
+      
+      if (createResponse.error) {
+        // Reverter status para DISCONNECTED em caso de erro
+        await prisma.instanciaWhatsApp.update({
+          where: { id },
+          data: { status: 'DISCONNECTED' }
+        })
+        
+        return NextResponse.json({ 
+          error: `Erro ao criar instância na uaZapi: ${createResponse.error}` 
+        }, { status: 500 })
+      }
+
+      // Salvar o token retornado
+      instanceToken = createResponse.token || null
+      
+      if (instanceToken) {
+        await prisma.instanciaWhatsApp.update({
+          where: { id },
+          data: { token: instanceToken }
+        })
+        console.log('[QRCode] Token salvo:', instanceToken?.substring(0, 8) + '...')
+      }
+    }
+
     // Obter QRCode da uaZapi
-    const uazapiResponse = await connectUazapiInstance(instancia.token || instancia.instanciaId)
+    console.log('[QRCode] Conectando instância...')
+    const uazapiResponse = await connectUazapiInstance(instanceToken || instancia.instanciaId)
 
     if (uazapiResponse.error) {
       // Reverter status para DISCONNECTED em caso de erro
@@ -65,9 +98,27 @@ export async function GET(
       }, { status: 500 })
     }
 
-    // Atualizar QRCode no banco
+    // O QRCode vem em base64 ou instance.qrcode
     const qrCode = uazapiResponse.base64 || uazapiResponse.qrcode || null
     
+    // Verificar se conectou (pode ter conectado automaticamente se já tinha sessão)
+    if (uazapiResponse.connected) {
+      await prisma.instanciaWhatsApp.update({
+        where: { id },
+        data: { 
+          status: 'CONNECTED',
+          qrCode: null
+        }
+      })
+      
+      return NextResponse.json({
+        qrCode: null,
+        status: 'CONNECTED',
+        message: 'Instância conectada com sucesso!'
+      })
+    }
+    
+    // Atualizar QRCode no banco
     if (qrCode) {
       await prisma.instanciaWhatsApp.update({
         where: { id },

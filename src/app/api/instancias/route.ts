@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth-helpers'
 import { z } from 'zod'
-import { createUazapiInstance, connectUazapiInstance, deleteUazapiInstance } from '@/lib/uazapi'
 
 // Schema de validação para criação de instância
 const createInstanciaSchema = z.object({
@@ -51,7 +50,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Criar nova instância
+// POST - Criar nova instância (apenas no banco, sem integração uaZapi)
 export async function POST(request: NextRequest) {
   try {
     const user = getAuthUser(request)
@@ -96,24 +95,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Gerar ID único para a instância
+    // Gerar ID único para a instância (será usado na uaZapi quando conectar)
     const instanciaId = `wa-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
 
-    // Criar instância na uaZapi
-    const uazapiResponse = await createUazapiInstance(instanciaId)
-
-    if (uazapiResponse.error) {
-      return NextResponse.json({ 
-        error: `Erro ao criar instância na uaZapi: ${uazapiResponse.error}` 
-      }, { status: 500 })
-    }
-
-    // Criar instância no banco de dados
+    // Criar instância no banco de dados (sem integração uaZapi ainda)
     const instancia = await prisma.instanciaWhatsApp.create({
       data: {
         nome: validatedData.nome,
         instanciaId: instanciaId,
-        token: uazapiResponse.token || null,
+        token: null, // Será preenchido ao conectar na uaZapi
         empresaId: empresaId,
         status: 'DISCONNECTED'
       },
@@ -123,6 +113,8 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+
+    console.log('[Instâncias] Nova instância criada:', instancia.id, 'Nome:', instancia.nome, 'Status:', instancia.status)
 
     return NextResponse.json(instancia, { status: 201 })
   } catch (error) {
