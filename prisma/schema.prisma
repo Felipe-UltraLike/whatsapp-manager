@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum InstanceStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+}
+
+model Empresa {
+  id              String   @id @default(cuid())
+  nome            String
+  maxInstances    Int      @default(5)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  usuarios        Usuario[]
+  instancias      InstanciaWhatsApp[]
+  boletos         Boleto[]
+}
+
+model Usuario {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  nome      String
+  senha     String
+  role      UserRole @default(USER)
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InstanciaWhatsApp {
+  id              String         @id @default(cuid())
+  nome            String
+  instanciaId     String         @unique
+  token           String?
+  status          InstanceStatus @default(DISCONNECTED)
+  qrCode          String?
+  telefone        String?
+  empresaId       String
+  empresa         Empresa        @relation(fields: [empresaId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Boleto {
+  id              String   @id @default(cuid())
+  nomeCliente     String
+  dataVencimento  DateTime
+  valor           Float
+  empresaId       String
+  empresa         Empresa  @relation(fields: [empresaId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
